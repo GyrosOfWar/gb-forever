@@ -2,7 +2,6 @@ use camino::Utf8Path;
 use futures::{pin_mut, TryStreamExt};
 use gb_forever::ia::InternetArchive;
 use gb_forever::Result;
-use reqwest::Url;
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
@@ -27,19 +26,6 @@ pub async fn write_concat_text_file(path: &Utf8Path, sources: &[&str]) -> Result
     Ok(())
 }
 
-pub async fn get_item_details(item: &str) -> Result<()> {
-    let client = reqwest::Client::new();
-
-    let mut url = Url::parse("https://archive.org/metadata/")?;
-    url.set_path(item);
-
-    let response = client.get(url).send().await?;
-    let data: serde_json::Value = response.json().await?;
-    info!("{}", serde_json::to_string_pretty(&data)?);
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
@@ -54,6 +40,9 @@ async fn main() -> Result<()> {
 
     while let Some(item) = stream.try_next().await? {
         info!("got item: {:#?}", item);
+
+        // let details = archive.get_item_details(&item.identifier).await?;
+        // info!("got details: {:#?}", details);
     }
 
     Ok(())

@@ -1,4 +1,7 @@
 use camino::Utf8Path;
+use futures::{pin_mut, TryStreamExt};
+use gb_forever::ia::InternetArchive;
+use gb_forever::Result;
 use reqwest::Url;
 use tokio::{
     fs::{self, File},
@@ -6,8 +9,6 @@ use tokio::{
 };
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-
-pub type Result<T> = color_eyre::Result<T>;
 
 pub async fn write_concat_text_file(path: &Utf8Path, sources: &[&str]) -> Result<()> {
     let temp_file = path.with_file_name(format!(
@@ -26,27 +27,11 @@ pub async fn write_concat_text_file(path: &Utf8Path, sources: &[&str]) -> Result
     Ok(())
 }
 
-pub async fn fetch_giant_bomb_videos() -> Result<()> {
-    let query = "collection:giant-bomb-archive";
-    let fields = [
-        "title",
-        "identifier",
-        "date",
-        "size",
-        "files",
-        "external-identifier",
-        "collection",
-        "format",
-        "topics",
-    ];
-    let fields = fields.join(",");
+pub async fn get_item_details(item: &str) -> Result<()> {
     let client = reqwest::Client::new();
 
-    let mut url = Url::parse("https://archive.org/services/search/v1/scrape")?;
-    url.query_pairs_mut()
-        .append_pair("q", query)
-        .append_pair("fields", &fields)
-        .append_pair("count", "10000");
+    let mut url = Url::parse("https://archive.org/metadata/")?;
+    url.set_path(item);
 
     let response = client.get(url).send().await?;
     let data: serde_json::Value = response.json().await?;
@@ -62,7 +47,14 @@ async fn main() -> Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    fetch_giant_bomb_videos().await?;
+    let archive = InternetArchive::default();
+    let stream = archive.search_all("collection:giant-bomb-archive");
+
+    pin_mut!(stream);
+
+    while let Some(item) = stream.try_next().await? {
+        info!("got item: {:#?}", item);
+    }
 
     Ok(())
 }

@@ -11,8 +11,6 @@ fn stream_inner(concat_file: String, stream_key: String, cwd: Utf8PathBuf) -> Re
 
     let process = Command::new("ffmpeg")
         .current_dir(cwd)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
         .args(vec![
             "-re",
             "-f",
@@ -44,8 +42,6 @@ fn stream_inner(concat_file: String, stream_key: String, cwd: Utf8PathBuf) -> Re
             &destination,
         ])
         .spawn()?;
-
-    let stdout = process.stdout.unwrap();
 
     Ok(())
 }

@@ -27,5 +27,7 @@ async fn main() -> Result<()> {
         database.insert_items(&chunk).await?;
     }
 
+    database.create_random_playlist().await?;
+
     Ok(())
 }

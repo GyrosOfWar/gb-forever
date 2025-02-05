@@ -1,8 +1,7 @@
 use std::process::Stdio;
 
 use camino::Utf8PathBuf;
-use futures::FutureExt;
-use tokio::{process::Command, sync::oneshot};
+use tokio::process::Command;
 use tracing::error;
 
 use crate::Result;

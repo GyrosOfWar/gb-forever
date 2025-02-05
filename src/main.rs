@@ -2,7 +2,6 @@ use std::env;
 
 use camino::Utf8Path;
 use gb_forever::{db::Database, ia::InternetArchive, Result};
-use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]

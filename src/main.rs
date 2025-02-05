@@ -17,10 +17,12 @@ async fn main() -> Result<()> {
     let database = Database::connect(&url).await?;
     let ia = InternetArchive::default();
 
+    let video_path = Utf8Path::new("videos");
+    tokio::fs::create_dir_all(&video_path).await?;
+
     for _ in 0..10 {
         let video = database.random_video().await?;
-        ia.download_video(&video.identifier, Utf8Path::new("videos"))
-            .await?;
+        ia.download_video(&video.identifier, &video_path).await?;
     }
 
     Ok(())

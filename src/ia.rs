@@ -1,10 +1,13 @@
+use std::time::Instant;
+
 use crate::Result;
 use async_stream::try_stream;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use color_eyre::eyre::{Context, OptionExt};
 use futures::Stream;
 use reqwest::Url;
 use serde::Deserialize;
+use tokio::io::AsyncWriteExt;
 use tracing::info;
 
 #[derive(Debug, Deserialize)]
@@ -130,7 +133,7 @@ impl InternetArchive {
             .map_err(From::from)
     }
 
-    pub async fn download_video(&self, identifier: &str, folder: &Utf8Path) -> Result<()> {
+    pub async fn download_video(&self, identifier: &str, folder: &Utf8Path) -> Result<Utf8PathBuf> {
         let details = self.get_item_details(identifier).await?;
         let video_file = details
             .files
@@ -142,8 +145,48 @@ impl InternetArchive {
             "https://{}{}/{}",
             details.server, details.directory, video_file.name
         );
-        info!("Downloading from URL {url}");
 
-        Ok(())
+        let mut response = self.client.get(&url).send().await?;
+        let path = folder.join(&video_file.name);
+        info!("Downloading from URL {url} to {path}");
+
+        let mut file = tokio::fs::File::create(&path).await?;
+        let mut progress = 0;
+        let content_len = response.content_length().unwrap_or_default();
+        let start = Instant::now();
+        let mut reads = 0;
+        while let Some(chunk) = response.chunk().await? {
+            file.write_all(&chunk).await?;
+            progress += chunk.len();
+            let elapsed = start.elapsed().as_secs_f64();
+            let speed = progress as f64 / elapsed;
+            let mb_s = speed / 1024.0 / 1024.0;
+            if reads % 500 == 0 {
+                info!(
+                    "Downloaded {} / {} ({:.2} MB/s)",
+                    format_bytes(progress as u64),
+                    format_bytes(content_len),
+                    mb_s
+                );
+            }
+            reads += 1;
+        }
+
+        Ok(path)
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    if bytes < KB {
+        format!("{} B", bytes)
+    } else if bytes < MB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else if bytes < GB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
     }
 }

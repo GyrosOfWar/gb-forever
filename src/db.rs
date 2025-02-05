@@ -5,6 +5,19 @@ use tracing::info;
 
 use crate::{ia::MetadataItem, Result};
 
+#[derive(Debug)]
+pub struct GbVideo {
+    pub id: i64,
+    pub date: Option<String>,
+    pub description: Option<String>,
+    pub title: String,
+    pub item_size: Option<i64>,
+    pub identifier: String,
+    pub external_identifier: Option<String>,
+    pub collections: Option<Vec<String>>,
+    pub creator: Option<String>,
+}
+
 pub struct Database {
     pool: sqlx::PgPool,
 }
@@ -60,5 +73,12 @@ impl Database {
         let elapsed = start.elapsed();
         info!("inserted {} items in {:?}", items.len(), elapsed);
         Ok(())
+    }
+
+    pub async fn random_video(&self) -> Result<GbVideo> {
+        sqlx::query_as!(GbVideo, "SELECT * FROM gb_videos ORDER BY random() LIMIT 1")
+            .fetch_one(&self.pool)
+            .await
+            .wrap_err("failed to fetch random video from database")
     }
 }

@@ -1,48 +1,26 @@
+use std::env;
+
 use camino::Utf8Path;
-use futures::{pin_mut, TryStreamExt};
-use gb_forever::ia::InternetArchive;
-use gb_forever::Result;
-use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-};
+use gb_forever::{db::Database, ia::InternetArchive, Result};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-
-pub async fn write_concat_text_file(path: &Utf8Path, sources: &[&str]) -> Result<()> {
-    let temp_file = path.with_file_name(format!(
-        "{}_temp.{}",
-        path.file_stem().unwrap(),
-        path.extension().unwrap()
-    ));
-    let mut file = File::create(&temp_file).await?;
-    for source in sources {
-        let string = format!("file '{}'\n", source);
-        file.write_all(string.as_bytes()).await?;
-    }
-
-    fs::rename(temp_file, path).await?;
-
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
+    let _ = dotenvy::dotenv();
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    let archive = InternetArchive::default();
-    let stream = archive.search_all("collection:giant-bomb-archive");
+    let url = env::var("DATABASE_URL")?;
+    let database = Database::connect(&url).await?;
+    let ia = InternetArchive::default();
 
-    pin_mut!(stream);
-
-    while let Some(item) = stream.try_next().await? {
-        info!("got item: {:#?}", item);
-
-        // let details = archive.get_item_details(&item.identifier).await?;
-        // info!("got details: {:#?}", details);
+    for _ in 0..10 {
+        let video = database.random_video().await?;
+        ia.download_video(&video.identifier, Utf8Path::new("videos"))
+            .await?;
     }
 
     Ok(())

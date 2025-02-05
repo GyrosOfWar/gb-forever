@@ -1,10 +1,10 @@
 use crate::Result;
 use async_stream::try_stream;
-use color_eyre::eyre::Context;
+use camino::Utf8Path;
+use color_eyre::eyre::{Context, OptionExt};
 use futures::Stream;
 use reqwest::Url;
 use serde::Deserialize;
-use time::OffsetDateTime;
 use tracing::info;
 
 #[derive(Debug, Deserialize)]
@@ -20,7 +20,10 @@ pub struct ExtendedMetadata {
     pub item_size: i64,
     pub server: String,
     pub uniq: i64,
+    #[serde(rename = "dir")]
+    pub directory: String,
 }
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct File {
@@ -106,13 +109,18 @@ impl InternetArchive {
                     yield item;
                 }
                 cursor = response.cursor;
+
+                if cursor.is_none() {
+                    break;
+                }
             }
         }
     }
 
-    pub async fn get_item_details(&self, item: &str) -> Result<ExtendedMetadata> {
+    pub async fn get_item_details(&self, identifier: &str) -> Result<ExtendedMetadata> {
         let mut url = Url::parse("https://archive.org")?;
-        url.set_path(&format!("/metadata/{}", item));
+        url.set_path(&format!("/metadata/{}", identifier));
+        info!("Making request to {url}");
         self.client
             .get(url)
             .send()
@@ -120,5 +128,22 @@ impl InternetArchive {
             .json()
             .await
             .map_err(From::from)
+    }
+
+    pub async fn download_video(&self, identifier: &str, folder: &Utf8Path) -> Result<()> {
+        let details = self.get_item_details(identifier).await?;
+        let video_file = details
+            .files
+            .iter()
+            .find(|f| f.format == "MPEG4")
+            .ok_or_eyre("no video file found")?;
+
+        let url = format!(
+            "https://{}{}/{}",
+            details.server, details.directory, video_file.name
+        );
+        info!("Downloading from URL {url}");
+
+        Ok(())
     }
 }

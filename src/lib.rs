@@ -1,4 +1,5 @@
 pub mod db;
+pub mod ffmpeg;
 pub mod ia;
 pub mod stream;
 

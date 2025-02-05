@@ -44,7 +44,7 @@ pub struct File {
 pub struct MetadataItem {
     pub collections: Option<Vec<String>>,
     pub creator: Option<String>,
-    pub date: Option<OffsetDateTime>,
+    pub date: Option<String>,
     pub description: Option<String>,
     #[serde(rename = "external-identifier")]
     pub external_identifier: Option<String>,

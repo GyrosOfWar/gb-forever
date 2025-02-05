@@ -1,6 +1,6 @@
 CREATE TABLE gb_videos (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "date" TIMESTAMPTZ,
+    "date" VARCHAR,
     "description" VARCHAR,
     title VARCHAR NOT NULL,
     item_size BIGINT,

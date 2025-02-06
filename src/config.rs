@@ -1,3 +1,4 @@
+use camino::Utf8PathBuf;
 use config::{Config, Environment, File};
 use serde::Deserialize;
 
@@ -7,6 +8,7 @@ use crate::Result;
 pub struct AppConfig {
     pub database_url: String,
     pub stream_key: String,
+    pub video_path: Utf8PathBuf,
 }
 
 pub fn load_config() -> Result<AppConfig> {

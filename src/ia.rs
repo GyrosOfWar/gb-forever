@@ -67,7 +67,7 @@ pub struct MetadataResponse {
     pub total: u64,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InternetArchive {
     client: reqwest::Client,
 }

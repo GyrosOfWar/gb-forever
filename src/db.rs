@@ -20,6 +20,7 @@ pub struct GbVideo {
 
 #[derive(Debug)]
 pub struct PlaylistEntry {
+    pub id: i64,
     pub video_id: i64,
     pub status: String,
     pub file_path: Option<String>,
@@ -67,6 +68,7 @@ impl fmt::Display for PlaylistEntryStatus {
     }
 }
 
+#[derive(Clone)]
 pub struct Database {
     pool: sqlx::PgPool,
 }
@@ -157,9 +159,64 @@ impl Database {
         Ok(())
     }
 
+    pub async fn set_video_downloaded(
+        &self,
+        identifier: &str,
+        file_path: impl Into<String>,
+    ) -> Result<()> {
+        todo!()
+    }
+
     // TOOD add method to update current position in the video
 
     // TODO add method to get the current video
+
+    pub async fn current_video(&self) -> Result<Option<PlaylistEntry>> {
+        let index = sqlx::query_scalar!("SELECT entry_index FROM active_playlist_entry")
+            .fetch_one(&self.pool)
+            .await?;
+        let entry = sqlx::query_as!(
+            PlaylistEntry,
+            "SELECT * FROM playlist_entry WHERE id = $1",
+            index
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let status: PlaylistEntryStatus = entry.status.parse()?;
+        if let PlaylistEntryStatus::Active = status {
+            Ok(Some(entry))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn peek_next_videos(&self, count: usize) -> Result<Vec<PlaylistEntry>> {
+        sqlx::query_as!(
+            PlaylistEntry,
+            "SELECT * FROM playlist_entry WHERE status = 'unplayed' ORDER BY id LIMIT $1",
+            count as i64
+        )
+        .fetch_all(&self.pool)
+        .await
+        .wrap_err("failed to fetch next videos from database")
+    }
+
+    pub async fn move_to_next_video(&self) -> Result<Option<PlaylistEntry>> {
+        let entry = self.current_video().await?;
+        if let Some(entry) = entry {
+            let next_index = entry.id + 1;
+            todo!()
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn fetch_video(&self, id: i64) -> Result<GbVideo> {
+        sqlx::query_as!(GbVideo, "SELECT * FROM gb_videos WHERE id = $1", id)
+            .fetch_one(&self.pool)
+            .await
+            .wrap_err("failed to fetch video from database")
+    }
 
     // TODO add method to move to the next video (unless it's not downloaded yet)
 }

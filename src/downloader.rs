@@ -1,14 +1,11 @@
-use crate::{db::Database, ia::InternetArchive, Result};
+use crate::{
+    db::{Database, VideoId},
+    ia::InternetArchive,
+    Result,
+};
 use camino::Utf8PathBuf;
-use color_eyre::Report;
 use tokio::sync::mpsc;
 use tracing::error;
-
-#[derive(Debug)]
-pub enum VideoId {
-    IaIdentifier(String),
-    DatabaseId(i64),
-}
 
 #[derive(Clone)]
 pub struct DownloadOrchestrator {
@@ -30,24 +27,22 @@ impl DownloadOrchestrator {
         }
     }
 
-    async fn resolve_id(&self, id: VideoId) -> Result<String> {
-        match id {
-            VideoId::IaIdentifier(id) => Ok(id),
-            VideoId::DatabaseId(id) => {
-                let video = self.database.fetch_video(id).await?;
-                Ok(video.identifier)
-            }
-        }
+    async fn resolve_id(&self, id: &VideoId) -> Result<(String, i64)> {
+        let video = self.database.fetch_video(id).await?;
+
+        Ok((video.identifier.clone(), video.id))
     }
 
     pub async fn download_single_video(&self, id: VideoId) -> Result<()> {
-        let identifier = self.resolve_id(id).await?;
+        let (identifier, video_id) = self.resolve_id(&id).await?;
+        self.database.set_video_pending(video_id).await?;
+
         let file_path = self
             .ia
             .download_video(&identifier, &self.video_folder)
             .await?;
         self.database
-            .set_video_downloaded(&identifier, file_path)
+            .set_video_downloaded(video_id, file_path)
             .await?;
 
         Ok(())
@@ -63,15 +58,11 @@ impl DownloadOrchestrator {
 pub struct BackgroundDownloader {
     downloader: DownloadOrchestrator,
     rx: tokio::sync::mpsc::Receiver<Vec<VideoId>>,
-    video_folder: Utf8PathBuf,
 }
 
 impl BackgroundDownloader {
-    pub fn start_new(
-        downloader: DownloadOrchestrator,
-        video_folder: Utf8PathBuf,
-    ) -> mpsc::Sender<Vec<VideoId>> {
-        let (mut this, tx) = Self::new(downloader, video_folder);
+    pub fn start_new(downloader: DownloadOrchestrator) -> mpsc::Sender<Vec<VideoId>> {
+        let (mut this, tx) = Self::new(downloader);
         tokio::spawn(async move {
             if let Err(e) = this.run().await {
                 tracing::error!("background downloader failed: {e}");
@@ -80,20 +71,10 @@ impl BackgroundDownloader {
         tx
     }
 
-    fn new(
-        downloader: DownloadOrchestrator,
-        video_folder: Utf8PathBuf,
-    ) -> (Self, mpsc::Sender<Vec<VideoId>>) {
+    fn new(downloader: DownloadOrchestrator) -> (Self, mpsc::Sender<Vec<VideoId>>) {
         let (tx, rx) = mpsc::channel(32);
 
-        (
-            Self {
-                downloader,
-                rx,
-                video_folder,
-            },
-            tx,
-        )
+        (Self { downloader, rx }, tx)
     }
 
     async fn run(&mut self) -> Result<()> {

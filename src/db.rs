@@ -6,6 +6,12 @@ use tracing::info;
 use crate::{ia::MetadataItem, Result};
 
 #[derive(Debug)]
+pub enum VideoId {
+    IaIdentifier(String),
+    DatabaseId(i64),
+}
+
+#[derive(Debug)]
 pub struct GbVideo {
     pub id: i64,
     pub date: Option<String>,
@@ -159,12 +165,33 @@ impl Database {
         Ok(())
     }
 
+    pub async fn set_video_pending(&self, video_id: i64) -> Result<()> {
+        sqlx::query!(
+            "UPDATE playlist_entry SET status = 'pending' WHERE video_id = $1",
+            video_id
+        )
+        .execute(&self.pool)
+        .await
+        .wrap_err("failed to set video to pending")?;
+
+        Ok(())
+    }
+
     pub async fn set_video_downloaded(
         &self,
-        identifier: &str,
+        video_id: i64,
         file_path: impl Into<String>,
     ) -> Result<()> {
-        todo!()
+        sqlx::query!(
+            "UPDATE playlist_entry SET status = 'downloaded', file_path = $1 WHERE video_id = $2",
+            file_path.into(),
+            video_id
+        )
+        .execute(&self.pool)
+        .await
+        .wrap_err("failed to set video to downloaded")?;
+
+        Ok(())
     }
 
     // TOOD add method to update current position in the video
@@ -211,11 +238,30 @@ impl Database {
         }
     }
 
-    pub async fn fetch_video(&self, id: i64) -> Result<GbVideo> {
-        sqlx::query_as!(GbVideo, "SELECT * FROM gb_videos WHERE id = $1", id)
+    pub async fn fetch_video(&self, id: &VideoId) -> Result<GbVideo> {
+        match id {
+            VideoId::IaIdentifier(identifier) => sqlx::query_as!(
+                GbVideo,
+                "SELECT * FROM gb_videos WHERE identifier = $1",
+                identifier
+            )
             .fetch_one(&self.pool)
             .await
-            .wrap_err("failed to fetch video from database")
+            .wrap_err("failed to fetch video from database"),
+            VideoId::DatabaseId(id) => {
+                sqlx::query_as!(GbVideo, "SELECT * FROM gb_videos WHERE id = $1", id)
+                    .fetch_one(&self.pool)
+                    .await
+                    .wrap_err("failed to fetch video from database")
+            }
+        }
+    }
+
+    pub async fn get_video_id(&self, identifier: &str) -> Result<i64> {
+        sqlx::query_scalar!("SELECT id FROM gb_videos WHERE identifier = $1", identifier)
+            .fetch_one(&self.pool)
+            .await
+            .wrap_err("failed to fetch video id from database")
     }
 
     // TODO add method to move to the next video (unless it's not downloaded yet)

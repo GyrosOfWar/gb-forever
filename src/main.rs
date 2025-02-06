@@ -1,8 +1,7 @@
-use camino::Utf8Path;
 use gb_forever::{
     config::load_config,
-    db::Database,
-    downloader::{BackgroundDownloader, DownloadOrchestrator, VideoId},
+    db::{Database, VideoId},
+    downloader::{BackgroundDownloader, DownloadOrchestrator},
     ia::InternetArchive,
     Result,
 };
@@ -22,11 +21,8 @@ async fn main() -> Result<()> {
     let ia = InternetArchive::default();
     let downloader =
         DownloadOrchestrator::new(database.clone(), ia.clone(), config.video_path.clone());
-    let download_sender =
-        BackgroundDownloader::start_new(downloader.clone(), config.video_path.clone());
 
-    let video_path = Utf8Path::new("videos");
-    tokio::fs::create_dir_all(&video_path).await?;
+    tokio::fs::create_dir_all(&config.video_path).await?;
 
     match database.current_video().await? {
         Some(_) => todo!(),
@@ -44,7 +40,8 @@ async fn main() -> Result<()> {
         }
     }
 
-    // TODO fetch current video from database
+    let download_sender = BackgroundDownloader::start_new(downloader);
+
     // TODO start background job to fetch new videos in the background
     // TODO start background job to clean up old videos
     // TODO run ffmpeg
